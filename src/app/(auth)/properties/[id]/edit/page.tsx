@@ -14,6 +14,7 @@ import { ArrowLeft, Building, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Id } from "@/convex/_generated/dataModel";
+import { useAuth } from "@clerk/nextjs";
 
 interface EditPropertyPageProps {
   params: Promise<{
@@ -22,11 +23,15 @@ interface EditPropertyPageProps {
 }
 
 export default function EditPropertyPage({ params }: EditPropertyPageProps) {
+  const { isLoaded, userId } = useAuth();
   const router = useRouter();
   const resolvedParams = use(params);
   const propertyId = resolvedParams.id as Id<"properties">;
   
-  const property = useQuery(api.properties.getProperty, { id: propertyId });
+  const property = useQuery(
+    api.properties.getProperty, 
+    isLoaded && userId ? { id: propertyId } : "skip"
+  );
   const updateProperty = useMutation(api.properties.updateProperty);
   const deleteProperty = useMutation(api.properties.deleteProperty);
   
@@ -50,12 +55,26 @@ export default function EditPropertyPage({ params }: EditPropertyPageProps) {
     }
   }, [property]);
 
-  if (property === undefined) {
+  if (!isLoaded || property === undefined) {
     return (
       <div className="container mx-auto p-6 max-w-2xl">
         <div className="animate-pulse space-y-6">
           <div className="h-8 bg-gray-200 rounded w-1/3"></div>
           <div className="h-64 bg-gray-200 rounded"></div>
+        </div>
+      </div>
+    );
+  }
+  
+  if (!userId) {
+    return (
+      <div className="container mx-auto p-6 max-w-2xl">
+        <div className="text-center py-12">
+          <h1 className="text-2xl font-bold text-gray-900">Not Authenticated</h1>
+          <p className="text-gray-600 mt-2">Please sign in to edit this property.</p>
+          <Link href="/sign-in">
+            <Button className="mt-4">Sign In</Button>
+          </Link>
         </div>
       </div>
     );

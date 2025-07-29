@@ -25,6 +25,7 @@ export interface ExtractionArea {
   width: number;
   height: number;
   pageNumber: number;
+  color?: string; // Hex color for redaction
 }
 
 interface DocumentAreaSelectorProps {
@@ -81,11 +82,18 @@ export function DocumentAreaSelector({
     }
   }, [currentPage]);
 
+  useEffect(() => {
+    // Report initial scale when component mounts
+    onScaleChange?.(scale);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
     console.log("PDF loaded successfully with", numPages, "pages");
     setNumPages(numPages);
     setLoading(false);
     onDocumentLoad?.(numPages);
+    // Also report scale after document loads
+    onScaleChange?.(scale);
   };
 
   const sampleColorFromPDF = (e: React.MouseEvent<HTMLDivElement>): string | null => {
@@ -152,6 +160,7 @@ export function DocumentAreaSelector({
       width: 0,
       height: 0,
       pageNumber,
+      color: isRedactionMode ? redactionColor : undefined,
     });
   };
 
@@ -174,6 +183,7 @@ export function DocumentAreaSelector({
       width: Math.abs(x - startPoint.x),
       height: Math.abs(y - startPoint.y),
       pageNumber,
+      color: isRedactionMode ? redactionColor : undefined,
     });
   };
 
@@ -181,9 +191,22 @@ export function DocumentAreaSelector({
     if (!isDrawing || !currentRect) return;
     
     if (currentRect.width > 10 && currentRect.height > 10) {
+      console.log('=== CREATING NEW AREA ===');
+      console.log('Current rect:', currentRect);
+      console.log('Selected redaction color:', redactionColor);
+      console.log('Is redaction mode:', isRedactionMode);
+      console.log('Area color will be:', currentRect.color);
+      
       const newAreas = [...areas, currentRect];
       setAreas(newAreas);
       setSelectedArea(currentRect.id);
+      
+      console.log('Calling onAreasChange with:', newAreas);
+      console.log('New areas count:', newAreas.length);
+      newAreas.forEach((area, index) => {
+        console.log(`Area ${index}: id=${area.id}, color=${area.color}, page=${area.pageNumber}`);
+      });
+      
       onAreasChange?.(newAreas);
     }
     
@@ -225,7 +248,9 @@ export function DocumentAreaSelector({
             ? "border-blue-600 bg-blue-600 border-solid bg-opacity-30"
             : !isRedactionMode && "border-red-600 bg-red-600 bg-opacity-30",
           area === currentRect && !isRedactionMode && "border-dashed border-green-600 bg-green-600 bg-opacity-30",
-          area === currentRect && isRedactionMode && "border-dashed bg-opacity-50"
+          area === currentRect && isRedactionMode && "border-dashed bg-opacity-50",
+          // Add highlight for selected redaction areas
+          isRedactionMode && area.id === selectedArea && "ring-2 ring-blue-500 ring-offset-1"
         )}
         style={{
           left: `${area.x * scale}px`,
@@ -233,8 +258,8 @@ export function DocumentAreaSelector({
           width: `${area.width * scale}px`,
           height: `${area.height * scale}px`,
           ...(isRedactionMode ? {
-            backgroundColor: redactionColor,
-            borderColor: redactionColor,
+            backgroundColor: area.color || redactionColor, // Use area's saved color, fallback to current picker color
+            borderColor: area.color || redactionColor,
             opacity: area === currentRect ? 0.5 : 1
           } : {})
         }}
@@ -261,7 +286,11 @@ export function DocumentAreaSelector({
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setScale(Math.max(0.5, scale - 0.1))}
+            onClick={() => {
+              const newScale = Math.max(0.5, scale - 0.1);
+              setScale(newScale);
+              onScaleChange?.(newScale);
+            }}
           >
             <ZoomOut className="h-4 w-4" />
           </Button>
@@ -269,7 +298,11 @@ export function DocumentAreaSelector({
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setScale(Math.min(2, scale + 0.1))}
+            onClick={() => {
+              const newScale = Math.min(2, scale + 0.1);
+              setScale(newScale);
+              onScaleChange?.(newScale);
+            }}
           >
             <ZoomIn className="h-4 w-4" />
           </Button>
@@ -403,7 +436,10 @@ export function DocumentAreaSelector({
                         <Input
                           type="color"
                           value={redactionColor}
-                          onChange={(e) => setRedactionColor(e.target.value)}
+                          onChange={(e) => {
+                            console.log('Color picker changed to:', e.target.value);
+                            setRedactionColor(e.target.value);
+                          }}
                           className="w-12 h-8 p-1 rounded cursor-pointer"
                         />
                         <Button
@@ -425,7 +461,10 @@ export function DocumentAreaSelector({
                             key={color}
                             className="w-6 h-6 rounded border border-gray-300 cursor-pointer hover:scale-110 transition-transform"
                             style={{ backgroundColor: color }}
-                            onClick={() => setRedactionColor(color)}
+                            onClick={() => {
+                              console.log('Color button clicked:', color);
+                              setRedactionColor(color);
+                            }}
                           />
                         ))}
                       </div>

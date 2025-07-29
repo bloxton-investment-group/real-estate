@@ -97,9 +97,8 @@ export default defineSchema({
       adjustment: v.optional(v.number()),
       cost_per_kilowatt_hour: v.optional(v.number()),
       delivery_charges: v.optional(v.number()),
-      killowatt_hours_cost: v.optional(v.number()),
-      account_number: v.optional(v.number()),
-      meter_number: v.optional(v.number()),
+      account_number: v.optional(v.union(v.string(), v.number())),
+      meter_number: v.optional(v.union(v.string(), v.number())),
       start_date: v.optional(v.string()),
       end_date: v.optional(v.string()),
       due_date: v.optional(v.string()),
@@ -135,9 +134,12 @@ export default defineSchema({
         width: v.number(),
         height: v.number(),
         pageNumber: v.number(),
+        color: v.optional(v.string()), // Hex color for redaction (e.g., "#FFFFFF", "#000000")
       })),
     }))),
-    // Invoice calculation notes
+    // Bill-specific notes (separate from invoice notes)
+    billNotes: v.optional(v.string()),
+    // Legacy field for compatibility (to be removed after migration)
     invoiceNotes: v.optional(v.string()),
     uploadedBy: v.id("users"),
     createdAt: v.number(),

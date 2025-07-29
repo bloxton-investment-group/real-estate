@@ -21,6 +21,24 @@ export const getUtilityBills = query({
   },
 });
 
+// Get a single utility bill by ID (for viewing PDF)
+export const getUtilityBill = query({
+  args: { billId: v.id("utilityBills") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const bill = await ctx.db.get(args.billId);
+    if (!bill) {
+      throw new Error("Utility bill not found");
+    }
+
+    return bill;
+  },
+});
+
 // Get meter readings for a property
 export const getMeterReadings = query({
   args: { propertyId: v.id("properties") },
@@ -52,9 +70,8 @@ export const createUtilityBill = mutation({
       adjustment: v.optional(v.number()),
       cost_per_kilowatt_hour: v.optional(v.number()),
       delivery_charges: v.optional(v.number()),
-      killowatt_hours_cost: v.optional(v.number()),
-      account_number: v.optional(v.number()),
-      meter_number: v.optional(v.number()),
+      account_number: v.optional(v.string()),
+      meter_number: v.optional(v.string()),
       start_date: v.optional(v.string()),
       end_date: v.optional(v.string()),
       due_date: v.optional(v.string()),
@@ -90,9 +107,10 @@ export const createUtilityBill = mutation({
         width: v.number(),
         height: v.number(),
         pageNumber: v.number(),
+        color: v.optional(v.string()),
       })),
     }))),
-    invoiceNotes: v.optional(v.string()),
+    billNotes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -122,7 +140,7 @@ export const createUtilityBill = mutation({
       extractionAreas: args.extractionAreas,
       extractedValues: args.extractedValues,
       pageInfo: args.pageInfo,
-      invoiceNotes: args.invoiceNotes,
+      billNotes: args.billNotes,
       uploadedBy: user._id,
       createdAt: Date.now(),
     });
@@ -380,5 +398,128 @@ export const createExtractionTemplate = mutation({
     });
 
     return templateId;
+  },
+});
+
+// Update utility bill with redacted PDF URL (called by PDF processing action)
+export const updateUtilityBillRedactedUrl = mutation({
+  args: {
+    billId: v.id("utilityBills"),
+    summaryPageUrl: v.optional(v.string()),
+    processingStats: v.optional(v.object({
+      originalPages: v.number(),
+      finalPages: v.number(),
+      removedPages: v.number(),
+      redactionCount: v.number(),
+    })),
+    processingError: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const bill = await ctx.db.get(args.billId);
+    if (!bill) {
+      throw new Error("Utility bill not found");
+    }
+
+    // Update the bill with redacted PDF URL
+    await ctx.db.patch(args.billId, {
+      summaryPageUrl: args.summaryPageUrl || undefined,
+    });
+
+    // Get current user for logging
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .first();
+
+    if (user) {
+      // Log the PDF processing result
+      await ctx.db.insert("auditLogs", {
+        userId: user._id,
+        action: args.summaryPageUrl ? "pdf_processing_success" : "pdf_processing_error",
+        resourceType: "utilityBills",
+        resourceId: args.billId,
+        metadata: {
+          processingStats: args.processingStats,
+          processingError: args.processingError,
+        },
+        timestamp: Date.now(),
+      });
+    }
+
+    return { success: true };
+  },
+});
+
+// Update utility bill page info (for re-editing)
+export const updateUtilityBillPageInfo = mutation({
+  args: {
+    billId: v.id("utilityBills"),
+    pageInfo: v.array(v.object({
+      pageNumber: v.number(),
+      keep: v.boolean(),
+      redactionAreas: v.array(v.object({
+        id: v.string(),
+        fieldName: v.string(),
+        fieldType: v.union(v.literal("text"), v.literal("number"), v.literal("currency"), v.literal("date")),
+        x: v.number(),
+        y: v.number(),
+        width: v.number(),
+        height: v.number(),
+        pageNumber: v.number(),
+        color: v.optional(v.string()),
+      })),
+    })),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const bill = await ctx.db.get(args.billId);
+    if (!bill) {
+      throw new Error("Utility bill not found");
+    }
+
+    // Get current user
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .first();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Only admins and managers can edit bills
+    if (user.role === "viewer") {
+      throw new Error("Insufficient permissions to edit utility bills");
+    }
+
+    // Update the bill's page info
+    await ctx.db.patch(args.billId, {
+      pageInfo: args.pageInfo,
+    });
+
+    // Log the action
+    await ctx.db.insert("auditLogs", {
+      userId: user._id,
+      action: "update_bill_pages",
+      resourceType: "utilityBills",
+      resourceId: args.billId,
+      metadata: {
+        pagesKept: args.pageInfo.filter(p => p.keep).length,
+        totalPages: args.pageInfo.length,
+        redactionCount: args.pageInfo.reduce((sum, p) => sum + p.redactionAreas.length, 0),
+      },
+      timestamp: Date.now(),
+    });
+
+    return { success: true };
   },
 });

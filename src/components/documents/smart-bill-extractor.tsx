@@ -22,13 +22,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { extractFromPdfWithAreas, type ExtractionRule } from "@/lib/area-based-extraction";
+import type { ExtractionRule } from "@/lib/area-based-extraction";
 import { VisualTextSelector } from "./visual-text-selector";
 import { ExtractionDebugger } from "./extraction-debugger";
 import { OCRDebugViewer } from "./ocr-debug-viewer";
 import { OCRTips } from "./ocr-tips";
-import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
-import { ocrService } from "@/lib/ocr-service";
 
 interface SmartBillExtractorProps {
   propertyId: Id<"properties">;
@@ -45,11 +43,10 @@ const UTILITY_FIELDS = {
   delivery_charges: { name: "Delivery Charges", type: "currency" as const, required: true, parser: "money" },
   
   // Optional fields for reference
-  killowatt_hours_cost: { name: "Kilowatt Hours Cost", type: "currency" as const, required: false, parser: "money" },
-  account_number: { name: "Account Number", type: "number" as const, required: false, parser: "integer" },
+  account_number: { name: "Account Number", type: "text" as const, required: false, parser: "text" },
   start_date: { name: "Start Date", type: "date" as const, required: false, parser: "date_no_year" },
   end_date: { name: "End Date", type: "date" as const, required: false, parser: "date_no_year" },
-  meter_number: { name: "Meter Number", type: "number" as const, required: false, parser: "integer" },
+  meter_number: { name: "Meter Number", type: "text" as const, required: false, parser: "text" },
   due_date: { name: "Due Date", type: "date" as const, required: false, parser: "date" },
   bill_date: { name: "Bill Date", type: "date" as const, required: false, parser: "date" },
 } as const;
@@ -96,7 +93,7 @@ export function SmartBillExtractor({
   const [editingAssignment, setEditingAssignment] = useState<FieldAssignment | null>(null);
   const [showTextSelector, setShowTextSelector] = useState(false);
   const [currentScale, setCurrentScale] = useState(1.0);
-  const [invoiceNotes, setInvoiceNotes] = useState<string>("");
+  const [billNotes, setBillNotes] = useState<string>("");
 
   const handleFileUpload = async (files: { storageId: string; name: string; size: number; type: string }[]) => {
     if (files.length === 0) return;
@@ -218,7 +215,12 @@ export function SmartBillExtractor({
         }
       });
       
+      // Dynamically import the extraction function to avoid SSR issues
+      console.log("Extracting with scale:", currentScale);
+      console.log("Areas to extract:", areasToExtract);
+      const { extractFromPdfWithAreas } = await import("@/lib/area-based-extraction");
       const extractedData = await extractFromPdfWithAreas(fileUrl, areasToExtract, extractionRules, currentScale);
+      console.log("Extraction results:", extractedData);
       
       // Update field assignments with extracted values
       const updatedAssignments = fieldAssignments.map(assignment => {
@@ -327,14 +329,13 @@ export function SmartBillExtractor({
             case "delivery_charges":
               extractedData.delivery_charges = parseFloat(value.replace(/[^0-9.-]/g, "")) || 0;
               break;
-            case "killowatt_hours_cost":
-              extractedData.killowatt_hours_cost = parseFloat(value.replace(/[^0-9.-]/g, "")) || 0;
-              break;
             case "account_number":
-              extractedData.account_number = parseInt(value.replace(/[^0-9]/g, "")) || 0;
+              // Store as string since account numbers can contain letters
+              extractedData.account_number = value.trim();
               break;
             case "meter_number":
-              extractedData.meter_number = parseInt(value.replace(/[^0-9]/g, "")) || 0;
+              // Store as string since meter numbers can contain letters
+              extractedData.meter_number = value.trim();
               break;
             case "start_date":
             case "end_date":
@@ -369,14 +370,13 @@ export function SmartBillExtractor({
             case "delivery_charges":
               extractedData.delivery_charges = parseFloat(value.replace(/[^0-9.-]/g, "")) || 0;
               break;
-            case "killowatt_hours_cost":
-              extractedData.killowatt_hours_cost = parseFloat(value.replace(/[^0-9.-]/g, "")) || 0;
-              break;
             case "account_number":
-              extractedData.account_number = parseInt(value.replace(/[^0-9]/g, "")) || 0;
+              // Store as string since account numbers can contain letters
+              extractedData.account_number = value.trim();
               break;
             case "meter_number":
-              extractedData.meter_number = parseInt(value.replace(/[^0-9]/g, "")) || 0;
+              // Store as string since meter numbers can contain letters
+              extractedData.meter_number = value.trim();
               break;
             case "start_date":
             case "end_date":
@@ -424,11 +424,55 @@ export function SmartBillExtractor({
         extractionAreas,
         extractedValues,
         pageInfo,
-        invoiceNotes,
+        billNotes,
       });
 
+      // Check if we need to process the PDF (if any pages are removed or redaction areas exist)
+      const pagesToKeep = pageInfo.filter(p => p.keep);
+      const hasRedactions = pageInfo.some(p => p.redactionAreas && p.redactionAreas.length > 0);
+      const needsProcessing = pagesToKeep.length < pageInfo.length || hasRedactions;
+
+      if (needsProcessing) {
+        // Show processing message
+        toast("Processing PDF...", {
+          description: "Creating redacted version with selected pages and redactions",
+        });
+
+        try {
+          // Dynamically import and call the PDF processing action
+          const { api } = await import("../../../convex/_generated/api");
+          
+          // Call the PDF processing action (this should be called from the parent component)
+          // For now, we'll make a simple API call to trigger processing
+          const response = await fetch('/api/process-pdf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              originalPdfUrl: fileUrl,
+              pageInfo,
+              billId,
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error('PDF processing request failed');
+          }
+
+          toast("PDF processed successfully!", {
+            description: "Redacted version created with selected pages and redactions",
+          });
+        } catch (processingError) {
+          console.error("PDF processing failed:", processingError);
+          toast("PDF processing failed", {
+            description: "The bill was saved but redacted version could not be created",
+          });
+        }
+      }
+
       toast("Utility bill saved successfully!", {
-        description: "The bill has been processed and saved with extracted data",
+        description: needsProcessing 
+          ? "The bill has been processed and redacted version created"
+          : "The bill has been processed and saved with extracted data",
       });
 
       // Reset the form
@@ -458,12 +502,12 @@ export function SmartBillExtractor({
     if (!fileUrl || fieldAssignments.length === 0) return [];
 
     try {
-      // Set up PDF.js worker
-      if (typeof window !== "undefined") {
-        GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@5.3.93/build/pdf.worker.min.mjs`;
-      }
-
-      const pdf = await getDocument(fileUrl).promise;
+      // Dynamically import dependencies to avoid SSR issues
+      const { getDocument } = await import("@/lib/pdf-loader");
+      const { ocrService } = await import("@/lib/ocr-service");
+      
+      const loadingTask = await getDocument(fileUrl);
+      const pdf = await loadingTask.promise;
       const page = await pdf.getPage(fieldAssignments[0].area.pageNumber);
       
       const results = [];
@@ -547,13 +591,24 @@ export function SmartBillExtractor({
     
     switch (parser) {
       case "integer":
-        // Extract kilowatt hours as integer - remove commas, decimals
-        const intMatch = cleanText.match(/(\d+(?:,\d+)*)/);
-        if (intMatch) {
-          const intValue = intMatch[1].replace(/,/g, "");
-          return parseInt(intValue).toString();
+        // Extract kilowatt hours as integer - be conservative to avoid phantom digits
+        // First, try to find a clean number pattern
+        const cleanIntMatch = cleanText.match(/\b(\d{1,6}(?:,\d{3})*)\b/); // Word boundaries
+        if (cleanIntMatch) {
+          const intValue = cleanIntMatch[1].replace(/,/g, "");
+          const parsed = parseInt(intValue);
+          // Sanity check - kilowatt hours shouldn't be millions
+          if (parsed < 1000000) {
+            return parsed.toString();
+          }
         }
-        return cleanText.replace(/[^\d]/g, "") || "0";
+        
+        // Fallback: extract digits but be careful
+        const digits = cleanText.replace(/[^\d]/g, "");
+        if (digits.length > 0 && digits.length <= 6) { // Reasonable length
+          return digits;
+        }
+        return "0";
         
       case "decimal":
         // Extract decimal numbers - preserve decimal points
@@ -1248,19 +1303,19 @@ export function SmartBillExtractor({
                 </div>
               </div>
 
-              {/* Invoice Notes Section */}
+              {/* Bill Notes Section */}
               <div className="p-4 bg-gray-50 rounded-lg">
-                <h4 className="font-medium text-gray-800 mb-3">📋 Invoice Calculation Notes</h4>
+                <h4 className="font-medium text-gray-800 mb-3">📋 Bill Notes</h4>
                 <div className="space-y-2">
-                  <Label htmlFor="invoice-notes" className="text-sm text-gray-600">
+                  <Label htmlFor="bill-notes" className="text-sm text-gray-600">
                     Document your calculation method, tenant adjustments, or any special billing considerations
                   </Label>
                   <textarea
-                    id="invoice-notes"
+                    id="bill-notes"
                     className="w-full p-3 border rounded-md min-h-[120px] font-mono text-sm"
                     placeholder="Example:&#10;Tenant: Snyder&#10;Method: Advanced (proportional)&#10;Calculation: (Room: 2,456 kWh - Fan: 1,089 kWh) = 1,367 kWh net usage&#10;Contribution: 1,367 ÷ 15,234 = 8.97% of total bill&#10;Invoice: $156.78 (direct) + $23.45 (taxes/fees) = $180.23&#10;&#10;Redacted PDF attached for tenant reference."
-                    value={invoiceNotes}
-                    onChange={(e) => setInvoiceNotes(e.target.value)}
+                    value={billNotes}
+                    onChange={(e) => setBillNotes(e.target.value)}
                   />
                   <p className="text-xs text-gray-500">
                     These notes will be saved with the bill and can be referenced when creating tenant invoices.

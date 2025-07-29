@@ -1,6 +1,6 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Building, MapPin, Edit, Users, Plus, Mail, Phone, FileText, Calculator } from "lucide-react";
 import Link from "next/link";
 import { Id } from "@/convex/_generated/dataModel";
+import { useAuth } from "@clerk/nextjs";
+import { TenantCreateForm } from "@/components/tenant-billing/tenant-create-form";
 
 interface PropertyPageProps {
   params: Promise<{
@@ -17,19 +19,44 @@ interface PropertyPageProps {
 }
 
 export default function PropertyPage({ params }: PropertyPageProps) {
+  const { isLoaded, userId } = useAuth();
   const resolvedParams = use(params);
   const propertyId = resolvedParams.id as Id<"properties">;
+  const [showCreateForm, setShowCreateForm] = useState(false);
   
-  const property = useQuery(api.properties.getProperty, { id: propertyId });
-  const tenants = useQuery(api.properties.getPropertyTenants, { propertyId });
+  // Only query if authenticated
+  const property = useQuery(
+    api.properties.getProperty, 
+    isLoaded && userId ? { id: propertyId } : "skip"
+  );
+  const tenants = useQuery(
+    api.properties.getPropertyTenants, 
+    isLoaded && userId ? { propertyId } : "skip"
+  );
 
-  if (property === undefined || tenants === undefined) {
+  // Show loading state while auth is loading or queries are pending
+  if (!isLoaded || property === undefined || tenants === undefined) {
     return (
       <div className="container mx-auto p-6">
         <div className="animate-pulse space-y-6">
           <div className="h-8 bg-gray-200 rounded w-1/3"></div>
           <div className="h-32 bg-gray-200 rounded"></div>
           <div className="h-64 bg-gray-200 rounded"></div>
+        </div>
+      </div>
+    );
+  }
+  
+  // If not authenticated after loading
+  if (!userId) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="text-center py-12">
+          <h1 className="text-2xl font-bold text-gray-900">Not Authenticated</h1>
+          <p className="text-gray-600 mt-2">Please sign in to view this property.</p>
+          <Link href="/sign-in">
+            <Button className="mt-4">Sign In</Button>
+          </Link>
         </div>
       </div>
     );
@@ -143,7 +170,11 @@ export default function PropertyPage({ params }: PropertyPageProps) {
             <h2 className="text-xl font-semibold">Active Tenants</h2>
             <Badge variant="secondary">{activeTenants.length}</Badge>
           </div>
-          <Button size="sm" disabled>
+          <Button 
+            size="sm" 
+            onClick={() => setShowCreateForm(true)}
+            disabled={showCreateForm}
+          >
             <Plus className="h-4 w-4 mr-2" />
             Add Tenant
           </Button>
@@ -155,7 +186,10 @@ export default function PropertyPage({ params }: PropertyPageProps) {
               <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No active tenants</h3>
               <p className="text-gray-600 mb-4">This property doesn't have any active tenants yet</p>
-              <Button disabled>
+              <Button 
+                onClick={() => setShowCreateForm(true)}
+                disabled={showCreateForm}
+              >
                 <Plus className="h-4 w-4 mr-2" />
                 Add First Tenant
               </Button>
@@ -196,6 +230,20 @@ export default function PropertyPage({ params }: PropertyPageProps) {
                 </CardContent>
               </Card>
             ))}
+          </div>
+        )}
+
+        {/* Tenant Creation Form */}
+        {showCreateForm && (
+          <div className="mt-6">
+            <TenantCreateForm
+              propertyId={propertyId}
+              onSuccess={() => {
+                setShowCreateForm(false);
+                // The useQuery will automatically refetch due to Convex's reactivity
+              }}
+              onCancel={() => setShowCreateForm(false)}
+            />
           </div>
         )}
       </div>

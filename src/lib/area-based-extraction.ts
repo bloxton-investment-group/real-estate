@@ -1,13 +1,8 @@
-import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 import { ExtractionArea } from "@/components/documents/document-area-selector";
 import { ocrService } from "./ocr-service";
 import { imageEnhancer } from "./image-enhancement";
-
-// Set up PDF.js worker
-if (typeof window !== "undefined") {
-  GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@5.3.93/build/pdf.worker.min.mjs`;
-}
+import { getDocument } from "./pdf-loader";
 
 export interface ExtractionRule {
   // Visual selection-based extraction
@@ -42,7 +37,8 @@ export async function extractFromPdfWithAreas(
 ): Promise<ExtractedData[]> {
   try {
     // Load the PDF document
-    const pdf = await getDocument(fileUrl).promise;
+    const loadingTask = await getDocument(fileUrl);
+    const pdf = await loadingTask.promise;
     const results: ExtractedData[] = [];
 
     // Group areas by page for efficiency
@@ -140,14 +136,12 @@ async function extractTextFromAreas(
       height: area.height
     });
     
-    // Convert area coordinates to PDF coordinates
+    // Area coordinates are already in PDF space (stored as PDF units, not display pixels)
     // PDF coordinates have origin at bottom-left, but our selection areas use top-left
-    // Account for display scale - area coordinates are in display pixels, need to convert to PDF units
-    const scaleFactor = 1.0 / displayScale;
-    const pdfX1 = area.x * scaleFactor;
-    const pdfY1 = viewport.height - (area.y + area.height) * scaleFactor; // Flip Y coordinate
-    const pdfX2 = (area.x + area.width) * scaleFactor;
-    const pdfY2 = viewport.height - area.y * scaleFactor; // Flip Y coordinate
+    const pdfX1 = area.x;
+    const pdfY1 = viewport.height - (area.y + area.height); // Flip Y coordinate
+    const pdfX2 = area.x + area.width;
+    const pdfY2 = viewport.height - area.y; // Flip Y coordinate
     
     console.log('Converted PDF coordinates:', {
       x1: pdfX1,
@@ -271,8 +265,9 @@ async function extractWithOCR(
     
     console.log(`OCR: Viewport dimensions ${viewport.width} x ${viewport.height}`);
     
-    // Convert area coordinates accounting for display scale
-    const scaleFactor = ocrScale / displayScale;
+    // Area coordinates are already in PDF space (not display space)
+    // We only need to scale from PDF space (1.0) to OCR space (4.0)
+    const scaleFactor = ocrScale; // Not divided by displayScale!
     const areaX = area.x * scaleFactor;
     const areaY = area.y * scaleFactor;
     const areaWidth = area.width * scaleFactor;
@@ -281,7 +276,8 @@ async function extractWithOCR(
     console.log(`OCR: Area coordinates - x:${areaX}, y:${areaY}, w:${areaWidth}, h:${areaHeight}`);
     
     // Create a canvas for the specific area with padding for better OCR
-    const padding = 10;
+    // Use smaller padding for number fields to avoid capturing adjacent text
+    const padding = area.fieldType === 'number' || area.fieldType === 'currency' ? 5 : 10;
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d")!;
     
@@ -396,17 +392,35 @@ async function extractWithOCR(
     
     console.log(`OCR: Raw result for ${area.fieldName}:`, {
       text: result.text,
-      confidence: result.confidence
+      confidence: result.confidence,
+      words: result.words?.map(w => ({ text: w.text, confidence: w.confidence }))
     });
     
     // Clean up the OCR result
     let cleanedText = result.text.trim();
+    
+    // For number fields, be more aggressive about cleaning
+    if (area.fieldType === 'number' || area.fieldType === 'currency') {
+      // Look for the most confident numeric sequence
+      const words = result.words || [];
+      const numericWords = words
+        .filter(w => /\d/.test(w.text)) // Has at least one digit
+        .sort((a, b) => b.confidence - a.confidence); // Sort by confidence
+      
+      if (numericWords.length > 0) {
+        // Use the most confident word that contains numbers
+        cleanedText = numericWords[0].text;
+        console.log(`OCR: Using most confident numeric word: "${cleanedText}" (confidence: ${numericWords[0].confidence})`);
+      }
+    }
     
     // Remove common OCR artifacts
     cleanedText = cleanedText
       .replace(/\s+/g, ' ')  // Normalize whitespace
       .replace(/[|]/g, '')   // Remove vertical bars
       .replace(/[_]/g, '')   // Remove underscores
+      .replace(/[il]/g, '1') // Common OCR mistake: i/l interpreted as 1
+      .replace(/[oO]/g, '0') // Common OCR mistake: o/O interpreted as 0
       .trim();
     
     console.log(`OCR: Cleaned result for ${area.fieldName}: "${cleanedText}"`);

@@ -3,11 +3,12 @@
 import { use } from "react";
 import { useQuery } from "convex/react";
 import { useAuth } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, FileText, Upload, Calendar, Zap, FileImage, Download } from "lucide-react";
+import { ArrowLeft, FileText, Upload, Calendar, Zap, FileImage, Download, Edit3 } from "lucide-react";
 import Link from "next/link";
 import { Id } from "@/convex/_generated/dataModel";
 import { formatDistanceToNow } from "date-fns";
@@ -20,6 +21,7 @@ interface DocumentsPageProps {
 
 export default function DocumentsPage({ params }: DocumentsPageProps) {
   const { isLoaded, isSignedIn } = useAuth();
+  const router = useRouter();
   const resolvedParams = use(params);
   const propertyId = resolvedParams.id as Id<"properties">;
   
@@ -103,7 +105,10 @@ export default function DocumentsPage({ params }: DocumentsPageProps) {
           </div>
           
           <div className="flex gap-2">
-            <Link href={`/properties/${propertyId}/documents/enhanced-upload`}>
+            <Link 
+              href={`/properties/${propertyId}/documents/enhanced-upload`}
+              prefetch={true}
+            >
               <Button size="sm">
                 <Upload className="h-4 w-4 mr-2" />
                 Upload Utility Bill
@@ -236,10 +241,47 @@ export default function DocumentsPage({ params }: DocumentsPageProps) {
                       </div>
                       
                       <div className="flex gap-2 mt-4">
-                        <Button size="sm" variant="outline" className="flex-1" disabled>
+                        {/* View Redacted PDF (preferred) or Original PDF */}
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="flex-1"
+                          onClick={() => {
+                            const pdfUrl = bill.summaryPageUrl || bill.billPdfUrl;
+                            if (pdfUrl) {
+                              window.open(pdfUrl, '_blank');
+                            }
+                          }}
+                          disabled={!bill.billPdfUrl && !bill.summaryPageUrl}
+                        >
                           <Download className="h-4 w-4 mr-2" />
-                          View PDF
+                          {bill.summaryPageUrl ? 'View Redacted' : 'View Original'}
                         </Button>
+                        
+                        {/* Re-edit PDF button */}
+                        <Link href={`/properties/${propertyId}/documents/edit-pdf/${bill._id}`}>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            title="Re-edit pages and redactions"
+                          >
+                            <Edit3 className="h-4 w-4" />
+                          </Button>
+                        </Link>
+                        
+                        {/* Show original PDF button if redacted version exists */}
+                        {bill.summaryPageUrl && bill.billPdfUrl && (
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            onClick={() => {
+                              window.open(bill.billPdfUrl, '_blank');
+                            }}
+                            title="View original unredacted PDF"
+                          >
+                            <FileText className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     </CardContent>
                   </Card>

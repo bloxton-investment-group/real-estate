@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,10 +10,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, FileText, Calculator, DollarSign } from "lucide-react";
+import { InvoiceGenerator } from "../invoice-generation/invoice-generator";
+import { TenantInvoiceData } from "../invoice-generation/invoice-templates";
+import { toast } from "@/components/ui/use-toast";
+import { format, addDays } from "date-fns";
 
 interface Tenant {
   _id: Id<"tenants">;
   name: string;
+  email?: string;
+  phone?: string;
+  unitNumber?: string;
   billingInstructions?: string;
 }
 
@@ -43,6 +50,7 @@ interface UtilityBill {
 
 interface TenantInvoiceGeneratorProps {
   propertyId: Id<"properties">;
+  property?: { address: string; name: string };
   tenants: Tenant[];
   billingPeriods: TenantBillingPeriod[];
   utilityBills: UtilityBill[];
@@ -50,6 +58,7 @@ interface TenantInvoiceGeneratorProps {
 
 export function TenantInvoiceGenerator({ 
   propertyId, 
+  property,
   tenants, 
   billingPeriods, 
   utilityBills 
@@ -57,6 +66,12 @@ export function TenantInvoiceGenerator({
   const [selectedTenantId, setSelectedTenantId] = useState<Id<"tenants"> | null>(null);
   const [selectedPeriodIds, setSelectedPeriodIds] = useState<Set<Id<"tenantBillingPeriods">>>(new Set());
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedInvoiceData, setGeneratedInvoiceData] = useState<TenantInvoiceData | null>(null);
+  const [generatedInvoiceId, setGeneratedInvoiceId] = useState<Id<"tenantInvoices"> | null>(null);
+
+  const generateInvoice = useMutation(api.invoiceGeneration.generateTenantInvoice);
+  const updateInvoicePdf = useMutation(api.invoiceGeneration.updateInvoicePdfUrl);
+  const markAsSent = useMutation(api.invoiceGeneration.markInvoiceAsSent);
 
   const selectedTenant = tenants.find(t => t._id === selectedTenantId);
   const tenantPeriods = billingPeriods.filter(p => p.tenantId === selectedTenantId);
@@ -86,16 +101,86 @@ export function TenantInvoiceGenerator({
   };
 
   const handleGenerateInvoice = async () => {
-    if (selectedPeriodIds.size === 0) {
+    if (selectedPeriodIds.size === 0 || !selectedTenantId || !proRataCalculation) {
       return;
     }
 
     setIsGenerating(true);
     try {
-      // Here we would call the invoice generation mutation
-      // For now, just simulate the process
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      console.log("Generating invoice for periods:", Array.from(selectedPeriodIds));
+      // Generate invoice in database
+      const result = await generateInvoice({
+        propertyId,
+        tenantId: selectedTenantId,
+        billingPeriodIds: Array.from(selectedPeriodIds),
+        dueDate: format(addDays(new Date(), 30), 'yyyy-MM-dd'), // 30 days from now
+        customNotes: selectedTenant?.billingInstructions,
+      });
+
+      // Prepare invoice data for PDF generation
+      const tenant = tenants.find(t => t._id === selectedTenantId)!;
+      const periods = Array.from(selectedPeriodIds).map(id => 
+        billingPeriods.find(p => p._id === id)!
+      ).filter(Boolean);
+      
+      const earliestStart = periods.reduce((min, p) => 
+        new Date(p.startDate) < new Date(min) ? p.startDate : min, 
+        periods[0].startDate
+      );
+      const latestEnd = periods.reduce((max, p) => 
+        new Date(p.endDate) > new Date(max) ? p.endDate : max, 
+        periods[0].endDate
+      );
+
+      const invoiceData: TenantInvoiceData = {
+        invoiceNumber: result.invoiceNumber,
+        invoiceDate: new Date().toISOString(),
+        dueDate: format(addDays(new Date(), 30), 'yyyy-MM-dd'),
+        company: {
+          name: 'Bloxton Investment Group',
+        }, // Will use defaults from invoice generator
+        recipient: {
+          name: tenant.name,
+          email: tenant.email,
+          phone: tenant.phone,
+          unitNumber: tenant.unitNumber,
+        },
+        propertyAddress: property?.address || '',
+        billingPeriod: {
+          startDate: earliestStart,
+          endDate: latestEnd,
+        },
+        usage: {
+          tenantKwh: proRataCalculation.period.kilowattHours,
+          propertyTotalKwh: proRataCalculation.totalPropertyKwh,
+          tenantRatio: proRataCalculation.tenantRatio,
+        },
+        costs: {
+          electricRate: proRataCalculation.avgElectricRate,
+          directCost: proRataCalculation.directCost,
+          stateSalesTax: proRataCalculation.allocatedCosts.stateSalesTax,
+          grossReceiptTax: proRataCalculation.allocatedCosts.grossReceiptTax,
+          adjustment: proRataCalculation.allocatedCosts.adjustment,
+          deliveryCharges: proRataCalculation.allocatedCosts.deliveryCharges,
+          total: proRataCalculation.totalCost,
+        },
+        notes: tenant.billingInstructions,
+        calculationBreakdown: `Tenant Usage: ${proRataCalculation.period.kilowattHours} kWh\nProperty Total: ${proRataCalculation.totalPropertyKwh.toFixed(0)} kWh\nContribution: ${(proRataCalculation.tenantRatio * 100).toFixed(2)}%`,
+      };
+
+      setGeneratedInvoiceData(invoiceData);
+      setGeneratedInvoiceId(result.invoiceId);
+      
+      toast({
+        title: "Invoice Generated",
+        description: `Invoice ${result.invoiceNumber} has been created successfully.`,
+      });
+    } catch (error) {
+      console.error("Error generating invoice:", error);
+      toast({
+        title: "Error",
+        description: "Failed to generate invoice. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsGenerating(false);
     }
@@ -307,7 +392,7 @@ export function TenantInvoiceGenerator({
       )}
 
       {/* Generate Button */}
-      {selectedPeriodIds.size > 0 && (
+      {selectedPeriodIds.size > 0 && !generatedInvoiceData && (
         <Button
           onClick={handleGenerateInvoice}
           disabled={isGenerating}
@@ -316,6 +401,50 @@ export function TenantInvoiceGenerator({
         >
           {isGenerating ? "Generating Invoice..." : `Generate Invoice for ${selectedPeriodIds.size} Period(s)`}
         </Button>
+      )}
+
+      {/* Generated Invoice */}
+      {generatedInvoiceData && generatedInvoiceId && (
+        <InvoiceGenerator
+          invoiceData={generatedInvoiceData}
+          onSave={async (pdfUrl) => {
+            try {
+              await updateInvoicePdf({
+                invoiceId: generatedInvoiceId,
+                pdfUrl,
+              });
+              toast({
+                title: "PDF Saved",
+                description: "Invoice PDF has been saved to the system.",
+              });
+            } catch (error) {
+              console.error("Error saving PDF:", error);
+              toast({
+                title: "Error",
+                description: "Failed to save PDF. Please try again.",
+                variant: "destructive",
+              });
+            }
+          }}
+          onSend={async () => {
+            try {
+              await markAsSent({
+                invoiceId: generatedInvoiceId,
+              });
+              toast({
+                title: "Invoice Sent",
+                description: "Invoice has been marked as sent.",
+              });
+            } catch (error) {
+              console.error("Error marking as sent:", error);
+              toast({
+                title: "Error",
+                description: "Failed to mark invoice as sent.",
+                variant: "destructive",
+              });
+            }
+          }}
+        />
       )}
     </div>
   );
