@@ -11,7 +11,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { AlertTriangle, Calculator } from "lucide-react";
+import { AlertTriangle, Calculator, Save } from "lucide-react";
+import { BillingCalculatorDialog } from "./billing-calculator-dialog";
+import { useDraftStorage } from "@/hooks/useDraftStorage";
+import { Badge } from "@/components/ui/badge";
 
 interface Tenant {
   _id: Id<"tenants">;
@@ -24,30 +27,58 @@ interface TenantBillingPeriodFormProps {
   tenants: Tenant[];
 }
 
+interface FormData {
+  selectedTenantId: Id<"tenants"> | null;
+  startDate: string;
+  endDate: string;
+  kilowattHours: string;
+  roomReading: string;
+  fanReading: string;
+  mainReading: string;
+  calculationNotes: string;
+}
+
 export function TenantBillingPeriodForm({ propertyId, tenants }: TenantBillingPeriodFormProps) {
-  const [selectedTenantId, setSelectedTenantId] = useState<Id<"tenants"> | null>(null);
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [kilowattHours, setKilowattHours] = useState("");
-  const [roomReading, setRoomReading] = useState("");
-  const [fanReading, setFanReading] = useState("");
-  const [mainReading, setMainReading] = useState("");
-  const [calculationNotes, setCalculationNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const {
+    data: formData,
+    updateDraft,
+    clearDraft,
+    isDirty,
+    lastSaved,
+    isLoading: isDraftLoading,
+  } = useDraftStorage<FormData>(
+    {
+      selectedTenantId: null,
+      startDate: "",
+      endDate: "",
+      kilowattHours: "",
+      roomReading: "",
+      fanReading: "",
+      mainReading: "",
+      calculationNotes: "",
+    },
+    {
+      key: `tenant-billing-period-${propertyId}`,
+      debounceMs: 1000,
+      version: 1,
+    }
+  );
 
   const createBillingPeriod = useMutation(api.tenantBilling.createTenantBillingPeriod);
 
-  const selectedTenant = tenants.find(t => t._id === selectedTenantId);
+  const selectedTenant = tenants.find(t => t._id === formData.selectedTenantId);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!selectedTenantId || !startDate || !endDate || !kilowattHours) {
+    if (!formData.selectedTenantId || !formData.startDate || !formData.endDate || !formData.kilowattHours) {
       toast.error("Please fill in all required fields");
       return;
     }
 
-    const kwhValue = parseFloat(kilowattHours);
+    const kwhValue = parseFloat(formData.kilowattHours);
     if (isNaN(kwhValue) || kwhValue <= 0) {
       toast.error("Please enter a valid kilowatt hours value");
       return;
@@ -57,29 +88,22 @@ export function TenantBillingPeriodForm({ propertyId, tenants }: TenantBillingPe
 
     try {
       const meterReadings: any = {};
-      if (roomReading) meterReadings.room = parseFloat(roomReading);
-      if (fanReading) meterReadings.fan = parseFloat(fanReading);
-      if (mainReading) meterReadings.main = parseFloat(mainReading);
+      if (formData.roomReading) meterReadings.room = parseFloat(formData.roomReading);
+      if (formData.fanReading) meterReadings.fan = parseFloat(formData.fanReading);
+      if (formData.mainReading) meterReadings.main = parseFloat(formData.mainReading);
 
       await createBillingPeriod({
         propertyId,
-        tenantId: selectedTenantId,
-        startDate,
-        endDate,
+        tenantId: formData.selectedTenantId,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
         kilowattHours: kwhValue,
         meterReadings: Object.keys(meterReadings).length > 0 ? meterReadings : undefined,
-        calculationNotes: calculationNotes || undefined,
+        calculationNotes: formData.calculationNotes || undefined,
       });
 
-      // Reset form
-      setSelectedTenantId(null);
-      setStartDate("");
-      setEndDate("");
-      setKilowattHours("");
-      setRoomReading("");
-      setFanReading("");
-      setMainReading("");
-      setCalculationNotes("");
+      // Clear form and draft
+      clearDraft();
 
       toast.success("Billing period created successfully");
     } catch (error) {
@@ -153,17 +177,25 @@ export function TenantBillingPeriodForm({ propertyId, tenants }: TenantBillingPe
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calculator className="h-5 w-5" />
-            Create New Billing Period
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Calculator className="h-5 w-5" />
+              Create New Billing Period
+            </CardTitle>
+            {isDirty && (
+              <Badge variant="secondary" className="text-xs">
+                <Save className="h-3 w-3 mr-1" />
+                Draft saved
+              </Badge>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Tenant Selection */}
             <div>
               <Label htmlFor="tenant">Tenant *</Label>
-              <Select value={selectedTenantId || ""} onValueChange={(value) => setSelectedTenantId(value as Id<"tenants">)}>
+              <Select value={formData.selectedTenantId || ""} onValueChange={(value) => updateDraft({ selectedTenantId: value as Id<"tenants"> })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select a tenant" />
                 </SelectTrigger>
@@ -184,8 +216,8 @@ export function TenantBillingPeriodForm({ propertyId, tenants }: TenantBillingPe
                 <Input
                   id="start-date"
                   type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
+                  value={formData.startDate}
+                  onChange={(e) => updateDraft({ startDate: e.target.value })}
                   required
                 />
               </div>
@@ -194,8 +226,8 @@ export function TenantBillingPeriodForm({ propertyId, tenants }: TenantBillingPe
                 <Input
                   id="end-date"
                   type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
+                  value={formData.endDate}
+                  onChange={(e) => updateDraft({ endDate: e.target.value })}
                   required
                 />
               </div>
@@ -203,13 +235,38 @@ export function TenantBillingPeriodForm({ propertyId, tenants }: TenantBillingPe
 
             {/* Kilowatt Hours */}
             <div>
-              <Label htmlFor="kwh">Kilowatt Hours *</Label>
+              <div className="flex items-center justify-between mb-2">
+                <Label htmlFor="kwh">Kilowatt Hours *</Label>
+                <BillingCalculatorDialog
+                  onCalculationComplete={(result) => {
+                    // Extract kWh value from result if possible
+                    const match = result.match(/(\d+\.?\d*)\s*kWh/);
+                    if (match && match[1]) {
+                      const kwhValue = parseFloat(match[1]);
+                      if (!isNaN(kwhValue) && kwhValue > 0) {
+                        updateDraft({ kilowattHours: kwhValue.toString() });
+                      }
+                    }
+                    // Always append to calculation notes
+                    updateDraft({ 
+                      calculationNotes: formData.calculationNotes 
+                        ? `${formData.calculationNotes}\n${result}` 
+                        : result 
+                    });
+                  }}
+                >
+                  <Button type="button" variant="outline" size="sm">
+                    <Calculator className="h-4 w-4 mr-2" />
+                    Calculator
+                  </Button>
+                </BillingCalculatorDialog>
+              </div>
               <Input
                 id="kwh"
                 type="number"
                 step="0.01"
-                value={kilowattHours}
-                onChange={(e) => setKilowattHours(e.target.value)}
+                value={formData.kilowattHours}
+                onChange={(e) => updateDraft({ kilowattHours: e.target.value })}
                 placeholder="Enter tenant's total kWh usage"
                 required
               />
@@ -225,8 +282,8 @@ export function TenantBillingPeriodForm({ propertyId, tenants }: TenantBillingPe
                     id="room-reading"
                     type="number"
                     step="0.01"
-                    value={roomReading}
-                    onChange={(e) => setRoomReading(e.target.value)}
+                    value={formData.roomReading}
+                    onChange={(e) => updateDraft({ roomReading: e.target.value })}
                     placeholder="Room kWh"
                   />
                 </div>
@@ -236,8 +293,8 @@ export function TenantBillingPeriodForm({ propertyId, tenants }: TenantBillingPe
                     id="fan-reading"
                     type="number"
                     step="0.01"
-                    value={fanReading}
-                    onChange={(e) => setFanReading(e.target.value)}
+                    value={formData.fanReading}
+                    onChange={(e) => updateDraft({ fanReading: e.target.value })}
                     placeholder="Fan kWh"
                   />
                 </div>
@@ -247,8 +304,8 @@ export function TenantBillingPeriodForm({ propertyId, tenants }: TenantBillingPe
                     id="main-reading"
                     type="number"
                     step="0.01"
-                    value={mainReading}
-                    onChange={(e) => setMainReading(e.target.value)}
+                    value={formData.mainReading}
+                    onChange={(e) => updateDraft({ mainReading: e.target.value })}
                     placeholder="Main kWh"
                   />
                 </div>
@@ -260,8 +317,8 @@ export function TenantBillingPeriodForm({ propertyId, tenants }: TenantBillingPe
               <Label htmlFor="notes">Calculation Notes</Label>
               <Textarea
                 id="notes"
-                value={calculationNotes}
-                onChange={(e) => setCalculationNotes(e.target.value)}
+                value={formData.calculationNotes}
+                onChange={(e) => updateDraft({ calculationNotes: e.target.value })}
                 placeholder="e.g., Room: 2456 - Fan: 1089 = 1367 kWh"
                 rows={3}
               />

@@ -8,10 +8,11 @@ import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, FileText, Upload, Calendar, Zap, FileImage, Download, Edit3 } from "lucide-react";
+import { FileText, Upload, Calendar, Zap, FileImage, Download, Edit3 } from "lucide-react";
 import Link from "next/link";
 import { Id } from "@/convex/_generated/dataModel";
 import { formatDistanceToNow } from "date-fns";
+import { PageHeader } from "@/components/navigation/page-header";
 
 interface DocumentsPageProps {
   params: Promise<{
@@ -76,7 +77,7 @@ export default function DocumentsPage({ params }: DocumentsPageProps) {
       <div className="container mx-auto p-6">
         <div className="text-center py-12">
           <h1 className="text-2xl font-bold text-gray-900">Property Not Found</h1>
-          <p className="text-gray-600 mt-2">The property you're looking for doesn't exist.</p>
+          <p className="text-gray-600 mt-2">The property you&apos;re looking for doesn&apos;t exist.</p>
           <Link href="/properties">
             <Button className="mt-4">Back to Properties</Button>
           </Link>
@@ -90,32 +91,31 @@ export default function DocumentsPage({ params }: DocumentsPageProps) {
 
   return (
     <div className="container mx-auto p-6">
-      <div className="mb-6">
-        <Link href={`/properties/${propertyId}`}>
-          <Button variant="ghost" className="mb-4">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Property
+      <PageHeader
+        title="Documents"
+        backHref={`/properties/${propertyId}`}
+        backLabel="Back to Property"
+        breadcrumbs={[
+          { label: "Properties", href: "/properties" },
+          { label: property.name, href: `/properties/${propertyId}` },
+          { label: "Documents" }
+        ]}
+        showBreadcrumbs={true}
+      >
+        <Link 
+          href={`/properties/${propertyId}/documents/enhanced-upload`}
+          prefetch={true}
+        >
+          <Button size="sm">
+            <Upload className="h-4 w-4 mr-2" />
+            Upload Utility Bill
           </Button>
         </Link>
-        
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-3xl font-bold">Documents</h1>
-            <p className="text-gray-600 mt-1">{property.name} - {property.address}</p>
-          </div>
-          
-          <div className="flex gap-2">
-            <Link 
-              href={`/properties/${propertyId}/documents/enhanced-upload`}
-              prefetch={true}
-            >
-              <Button size="sm">
-                <Upload className="h-4 w-4 mr-2" />
-                Upload Utility Bill
-              </Button>
-            </Link>
-          </div>
-        </div>
+      </PageHeader>
+      
+      {/* Property Info */}
+      <div className="mb-6">
+        <p className="text-gray-600">{property.name} - {property.address}</p>
       </div>
 
       {/* Summary Stats */}

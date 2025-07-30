@@ -1,17 +1,19 @@
 "use client";
 
-import { use, useState, useEffect } from "react";
+import { use, useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { useAuth } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Save, FileText, Eye, EyeOff } from "lucide-react";
+import { Save, FileText, Eye, EyeOff, Database, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { Id } from "@/convex/_generated/dataModel";
 import { toast } from "@/components/ui/use-toast";
 import { DocumentAreaSelector } from "@/components/documents/document-area-selector";
+import { UtilityBillExtractedData } from "@/components/documents/utility-bill-extracted-data";
+import { PageHeader } from "@/components/navigation/page-header";
 
 interface EditPdfPageProps {
   params: Promise<{
@@ -45,7 +47,7 @@ export default function EditPdfPage({ params }: EditPdfPageProps) {
   
   const [pageInfo, setPageInfo] = useState<PageInfo[]>([]);
   const [loading, setLoading] = useState(false);
-  const [currentStep, setCurrentStep] = useState<"pages" | "redact">("pages");
+  const [currentStep, setCurrentStep] = useState<"pages" | "redact" | "data">("pages");
 
   // Fetch the utility bill
   const bill = useQuery(
@@ -59,18 +61,7 @@ export default function EditPdfPage({ params }: EditPdfPageProps) {
     isLoaded && isSignedIn ? { id: propertyId } : "skip"
   );
 
-  // Initialize pageInfo from existing bill data
-  useEffect(() => {
-    if (bill?.pageInfo && bill.pageInfo.length > 0) {
-      // Use existing page info if available
-      setPageInfo(bill.pageInfo);
-    } else if (bill?.billPdfUrl) {
-      // Initialize with all pages set to keep=true if no pageInfo exists
-      initializePagesFromPdf();
-    }
-  }, [bill]);
-
-  const initializePagesFromPdf = async () => {
+  const initializePagesFromPdf = useCallback(async () => {
     if (!bill?.billPdfUrl) return;
 
     try {
@@ -99,7 +90,18 @@ export default function EditPdfPage({ params }: EditPdfPageProps) {
         variant: "destructive",
       });
     }
-  };
+  }, [bill?.billPdfUrl]);
+
+  // Initialize pageInfo from existing bill data
+  useEffect(() => {
+    if (bill?.pageInfo && bill.pageInfo.length > 0) {
+      // Use existing page info if available
+      setPageInfo(bill.pageInfo);
+    } else if (bill?.billPdfUrl) {
+      // Initialize with all pages set to keep=true if no pageInfo exists
+      initializePagesFromPdf();
+    }
+  }, [bill, initializePagesFromPdf]);
 
   const handlePageToggle = (pageNumber: number, keep: boolean) => {
     setPageInfo(prev => 
@@ -272,7 +274,7 @@ export default function EditPdfPage({ params }: EditPdfPageProps) {
           <CardContent className="py-8 text-center">
             <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">Bill not found</h3>
-            <p className="text-gray-600 mb-4">The utility bill you're trying to edit doesn't exist.</p>
+            <p className="text-gray-600 mb-4">The utility bill you&apos;re trying to edit doesn&apos;t exist.</p>
             <Link href={`/properties/${propertyId}/documents`}>
               <Button variant="outline">
                 <ArrowLeft className="h-4 w-4 mr-2" />
@@ -290,32 +292,30 @@ export default function EditPdfPage({ params }: EditPdfPageProps) {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link href={`/properties/${propertyId}/documents`}>
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Documents
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold">Re-edit PDF</h1>
-            <p className="text-gray-600">
-              {property?.name} - Utility Bill
-            </p>
-          </div>
+      <PageHeader
+        title="Re-edit PDF"
+        backHref={`/properties/${propertyId}/documents`}
+        backLabel="Back to Documents"
+        breadcrumbs={[
+          { label: "Properties", href: "/properties" },
+          { label: property?.name || "Property", href: `/properties/${propertyId}` },
+          { label: "Documents", href: `/properties/${propertyId}/documents` },
+          { label: "Edit PDF" }
+        ]}
+        showBreadcrumbs={true}
+      >
+        <div className="text-sm text-gray-600">
+          {pagesToKeep.length} of {pageInfo.length} pages • {totalRedactions} redactions
         </div>
-        
-        <div className="flex items-center gap-3">
-          <div className="text-sm text-gray-600">
-            {pagesToKeep.length} of {pageInfo.length} pages • {totalRedactions} redactions
-          </div>
-          <Button onClick={handleSave} disabled={loading}>
-            <Save className="h-4 w-4 mr-2" />
-            {loading ? "Saving..." : "Save Changes"}
-          </Button>
-        </div>
+        <Button onClick={handleSave} disabled={loading}>
+          <Save className="h-4 w-4 mr-2" />
+          {loading ? "Saving..." : "Save Changes"}
+        </Button>
+      </PageHeader>
+      
+      {/* Property Info */}
+      <div className="mb-6">
+        <p className="text-gray-600">{property?.name} - Utility Bill</p>
       </div>
 
       {/* Steps */}
@@ -335,6 +335,14 @@ export default function EditPdfPage({ params }: EditPdfPageProps) {
         >
           <EyeOff className="h-4 w-4" />
           Add Redactions
+        </Button>
+        <Button
+          variant={currentStep === "data" ? "default" : "outline"}
+          onClick={() => setCurrentStep("data")}
+          className="flex items-center gap-2"
+        >
+          <Database className="h-4 w-4" />
+          Extracted Data
         </Button>
       </div>
 
@@ -406,6 +414,12 @@ export default function EditPdfPage({ params }: EditPdfPageProps) {
             />
           </CardContent>
         </Card>
+      )}
+
+      {currentStep === "data" && (
+        <UtilityBillExtractedData 
+          extractedData={bill.extractedData}
+        />
       )}
     </div>
   );

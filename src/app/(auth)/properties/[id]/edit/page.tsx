@@ -85,7 +85,7 @@ export default function EditPropertyPage({ params }: EditPropertyPageProps) {
       <div className="container mx-auto p-6 max-w-2xl">
         <div className="text-center py-12">
           <h1 className="text-2xl font-bold text-gray-900">Property Not Found</h1>
-          <p className="text-gray-600 mt-2">The property you're looking for doesn't exist.</p>
+          <p className="text-gray-600 mt-2">The property you&apos;re looking for doesn&apos;t exist.</p>
           <Link href="/properties">
             <Button className="mt-4">Back to Properties</Button>
           </Link>

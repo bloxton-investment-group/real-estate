@@ -6,11 +6,12 @@ import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Building, MapPin, Edit, Users, Plus, Mail, Phone, FileText, Calculator } from "lucide-react";
+import { Building, MapPin, Edit, Users, Plus, Mail, Phone, FileText, Calculator } from "lucide-react";
 import Link from "next/link";
 import { Id } from "@/convex/_generated/dataModel";
 import { useAuth } from "@clerk/nextjs";
 import { TenantCreateForm } from "@/components/tenant-billing/tenant-create-form";
+import { PageHeader } from "@/components/navigation/page-header";
 
 interface PropertyPageProps {
   params: Promise<{
@@ -67,7 +68,7 @@ export default function PropertyPage({ params }: PropertyPageProps) {
       <div className="container mx-auto p-6">
         <div className="text-center py-12">
           <h1 className="text-2xl font-bold text-gray-900">Property Not Found</h1>
-          <p className="text-gray-600 mt-2">The property you're looking for doesn't exist.</p>
+          <p className="text-gray-600 mt-2">The property you&apos;re looking for doesn&apos;t exist.</p>
           <Link href="/properties">
             <Button className="mt-4">Back to Properties</Button>
           </Link>
@@ -81,49 +82,44 @@ export default function PropertyPage({ params }: PropertyPageProps) {
 
   return (
     <div className="container mx-auto p-6">
-      <div className="mb-6">
-        <Link href="/properties">
-          <Button variant="ghost" className="mb-4">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Properties
+      <PageHeader
+        title={property.name}
+        backHref="/properties"
+        backLabel="Back to Properties"
+        breadcrumbs={[
+          { label: "Properties", href: "/properties" },
+          { label: property.name }
+        ]}
+        showBreadcrumbs={true}
+      >
+        <Badge variant={property.active ? "default" : "secondary"}>
+          {property.active ? "Active" : "Inactive"}
+        </Badge>
+        <Link href={`/properties/${propertyId}/documents`}>
+          <Button variant="outline" size="sm">
+            <FileText className="h-4 w-4 mr-2" />
+            Documents
           </Button>
         </Link>
-        
-        <div className="flex justify-between items-start">
-          <div className="flex items-center gap-3">
-            <Building className="h-8 w-8 text-primary" />
-            <div>
-              <h1 className="text-3xl font-bold">{property.name}</h1>
-              <div className="flex items-center text-gray-600 mt-1">
-                <MapPin className="h-4 w-4 mr-1" />
-                <span>{property.address}</span>
-              </div>
-            </div>
-          </div>
-          
-          <div className="flex gap-2">
-            <Badge variant={property.active ? "default" : "secondary"}>
-              {property.active ? "Active" : "Inactive"}
-            </Badge>
-            <Link href={`/properties/${propertyId}/documents`}>
-              <Button variant="outline" size="sm">
-                <FileText className="h-4 w-4 mr-2" />
-                Documents
-              </Button>
-            </Link>
-            <Link href={`/properties/${propertyId}/tenant-billing`}>
-              <Button variant="outline" size="sm">
-                <Calculator className="h-4 w-4 mr-2" />
-                Tenant Billing
-              </Button>
-            </Link>
-            <Link href={`/properties/${propertyId}/edit`}>
-              <Button variant="outline" size="sm">
-                <Edit className="h-4 w-4 mr-2" />
-                Edit
-              </Button>
-            </Link>
-          </div>
+        <Link href={`/properties/${propertyId}/tenant-billing`}>
+          <Button variant="outline" size="sm">
+            <Calculator className="h-4 w-4 mr-2" />
+            Tenant Billing
+          </Button>
+        </Link>
+        <Link href={`/properties/${propertyId}/edit`}>
+          <Button variant="outline" size="sm">
+            <Edit className="h-4 w-4 mr-2" />
+            Edit
+          </Button>
+        </Link>
+      </PageHeader>
+
+      {/* Property Details */}
+      <div className="mb-6">
+        <div className="flex items-center text-gray-600">
+          <MapPin className="h-4 w-4 mr-1" />
+          <span>{property.address}</span>
         </div>
       </div>
 
@@ -185,7 +181,7 @@ export default function PropertyPage({ params }: PropertyPageProps) {
             <CardContent className="py-8 text-center">
               <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No active tenants</h3>
-              <p className="text-gray-600 mb-4">This property doesn't have any active tenants yet</p>
+              <p className="text-gray-600 mb-4">This property doesn&apos;t have any active tenants yet</p>
               <Button 
                 onClick={() => setShowCreateForm(true)}
                 disabled={showCreateForm}

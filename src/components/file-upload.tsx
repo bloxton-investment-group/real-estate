@@ -40,7 +40,7 @@ export function FileUpload({
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([]);
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
 
-  const uploadFile = async (file: File): Promise<string> => {
+  const uploadFile = useCallback(async (file: File): Promise<string> => {
     // Get upload URL from Convex
     const uploadUrl = await generateUploadUrl();
 
@@ -57,7 +57,7 @@ export function FileUpload({
 
     const { storageId } = await response.json();
     return storageId;
-  };
+  }, [generateUploadUrl]);
 
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
@@ -129,7 +129,7 @@ export function FileUpload({
         toast.success(`Uploaded ${successfulUploads.length} file(s) successfully`);
       }
     },
-    [disabled, generateUploadUrl, onUploadComplete]
+    [disabled, onUploadComplete, uploadFile]
   );
 
   const { getRootProps, getInputProps, isDragActive, fileRejections } = useDropzone({

@@ -158,7 +158,7 @@ export const TenantProRataInvoice: React.FC<{ data: TenantInvoiceData }> = ({ da
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <View style={{ flex: 1 }}>
               {data.company.logo && (
-                <Image
+                <Image /* eslint-disable-line jsx-a11y/alt-text */
                   src={data.company.logo}
                   style={{ width: 120, height: 40, marginBottom: 10 }}
                 />
@@ -371,7 +371,7 @@ export const BasicMeterInvoice: React.FC<{ data: BasicMeterInvoiceData }> = ({ d
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <View style={{ flex: 1 }}>
               {data.company.logo && (
-                <Image
+                <Image /* eslint-disable-line jsx-a11y/alt-text */
                   src={data.company.logo}
                   style={{ width: 120, height: 40, marginBottom: 10 }}
                 />

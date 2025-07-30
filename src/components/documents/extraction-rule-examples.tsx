@@ -98,44 +98,44 @@ export function ExtractionRuleExamples() {
         <div className="space-y-4 text-sm">
           <div>
             <h4 className="font-medium text-blue-600">1. Extract After Symbol (@)</h4>
-            <p className="text-gray-600">Input: "123,456@$0.089550"</p>
-            <p className="text-green-600">Output: "$0.089550"</p>
+            <p className="text-gray-600">Input: &quot;123,456@$0.089550&quot;</p>
+            <p className="text-green-600">Output: &quot;$0.089550&quot;</p>
             <code className="text-xs bg-gray-100 p-1 rounded">
-              rules.splitAtSymbol("@", "after")
+              rules.splitAtSymbol(&quot;@&quot;, &quot;after&quot;)
             </code>
           </div>
           
           <div>
             <h4 className="font-medium text-blue-600">2. Split into Multiple Fields</h4>
-            <p className="text-gray-600">Input: "123,456@$0.089550"</p>
-            <p className="text-green-600">Output: quantity="123,456", unitPrice="$0.089550"</p>
+            <p className="text-gray-600">Input: &quot;123,456@$0.089550&quot;</p>
+            <p className="text-green-600">Output: quantity=&quot;123,456&quot;, unitPrice=&quot;$0.089550&quot;</p>
             <code className="text-xs bg-gray-100 p-1 rounded">
-              rules.quantityAndPrice(["quantity", "unitPrice"])
+              rules.quantityAndPrice([&quot;quantity&quot;, &quot;unitPrice&quot;])
             </code>
           </div>
           
           <div>
             <h4 className="font-medium text-blue-600">3. Regex Extraction</h4>
-            <p className="text-gray-600">Input: "Account #12345-ABC Total: $567.89"</p>
-            <p className="text-green-600">Output: "567.89" (extracted price)</p>
+            <p className="text-gray-600">Input: &quot;Account #12345-ABC Total: $567.89&quot;</p>
+            <p className="text-green-600">Output: &quot;567.89&quot; (extracted price)</p>
             <code className="text-xs bg-gray-100 p-1 rounded">
-              rules.regexExtract("\\$([0-9,]+\\.?[0-9]*)", 1)
+              rules.regexExtract(&quot;\\$([0-9,]+\\.?[0-9]*)&quot;, 1)
             </code>
           </div>
           
           <div>
             <h4 className="font-medium text-blue-600">4. Delimited Data Parsing</h4>
-            <p className="text-gray-600">Input: "John Doe|Manager|$75,000|2023-01-15"</p>
-            <p className="text-green-600">Output: name="John Doe", title="Manager", salary="$75,000", startDate="2023-01-15"</p>
+            <p className="text-gray-600">Input: &quot;John Doe|Manager|$75,000|2023-01-15&quot;</p>
+            <p className="text-green-600">Output: name=&quot;John Doe&quot;, title=&quot;Manager&quot;, salary=&quot;$75,000&quot;, startDate=&quot;2023-01-15&quot;</p>
             <code className="text-xs bg-gray-100 p-1 rounded">
-              rules.multiField("|", ["name", "title", "salary", "startDate"])
+              rules.multiField(&quot;|&quot;, [&quot;name&quot;, &quot;title&quot;, &quot;salary&quot;, &quot;startDate&quot;])
             </code>
           </div>
           
           <div>
             <h4 className="font-medium text-blue-600">5. Numbers Only</h4>
-            <p className="text-gray-600">Input: "Total: $1,234.56 (including tax)"</p>
-            <p className="text-green-600">Output: "1234.56"</p>
+            <p className="text-gray-600">Input: &quot;Total: $1,234.56 (including tax)&quot;</p>
+            <p className="text-green-600">Output: &quot;1234.56&quot;</p>
             <code className="text-xs bg-gray-100 p-1 rounded">
               rules.numbersOnly()
             </code>

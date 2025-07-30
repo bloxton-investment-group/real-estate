@@ -14,6 +14,8 @@ import { InvoiceGenerator } from "../invoice-generation/invoice-generator";
 import { TenantInvoiceData } from "../invoice-generation/invoice-templates";
 import { toast } from "@/components/ui/use-toast";
 import { format, addDays } from "date-fns";
+import { UtilityBillCoverage } from "./utility-bill-coverage";
+import { ProRataDetailsDialog } from "./pro-rata-details-dialog";
 
 interface Tenant {
   _id: Id<"tenants">;
@@ -319,6 +321,20 @@ export function TenantInvoiceGenerator({
         </Card>
       )}
 
+      {/* Utility Bill Coverage */}
+      {selectedPeriodIds.size > 0 && (
+        <>
+          {selectedPeriods.map((period) => period && (
+            <UtilityBillCoverage
+              key={period._id}
+              startDate={period.startDate}
+              endDate={period.endDate}
+              utilityBills={utilityBills}
+            />
+          ))}
+        </>
+      )}
+
       {/* Pro-rata Calculation Preview */}
       {proRataCalculation && selectedPeriodIds.size > 0 && (
         <Card className="border-green-200 bg-green-50">
@@ -381,7 +397,10 @@ export function TenantInvoiceGenerator({
               </div>
 
               <div className="mt-4 text-xs text-green-600">
-                <Badge variant="outline" className="mb-2">Overlapping Bills: {proRataCalculation.billAllocations?.length || 0}</Badge>
+                <div className="flex items-center justify-between mb-2">
+                  <Badge variant="outline">Overlapping Bills: {proRataCalculation.billAllocations?.length || 0}</Badge>
+                  <ProRataDetailsDialog calculation={proRataCalculation} />
+                </div>
                 <div>
                   This calculation uses pro-rata allocation based on overlapping utility bill periods.
                 </div>

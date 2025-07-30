@@ -9,7 +9,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TenantBillingPeriodForm } from "./tenant-billing-period-form";
 import { TenantBillingPeriodsList } from "./tenant-billing-periods-list";
 import { TenantInvoiceGenerator } from "./tenant-invoice-generator";
-import { BillingCalculatorWidget } from "./billing-calculator-widget";
+import { BillingCalculatorDialog } from "./billing-calculator-dialog";
+import { Button } from "@/components/ui/button";
+import { Calculator } from "lucide-react";
+import { PersistedNotesWidget } from "@/components/notes/persisted-notes-widget";
 
 interface TenantBillingManagerProps {
   propertyId: Id<"properties">;
@@ -33,12 +36,21 @@ export function TenantBillingManager({ propertyId }: TenantBillingManagerProps) 
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-semibold">Manage Billing</h2>
+        <BillingCalculatorDialog>
+          <Button variant="outline" size="sm">
+            <Calculator className="h-4 w-4 mr-2" />
+            Calculator
+          </Button>
+        </BillingCalculatorDialog>
+      </div>
+
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="periods">Billing Periods</TabsTrigger>
           <TabsTrigger value="new-period">New Period</TabsTrigger>
           <TabsTrigger value="invoices">Generate Invoice</TabsTrigger>
-          <TabsTrigger value="calculator">Calculator</TabsTrigger>
         </TabsList>
 
         <TabsContent value="periods" className="space-y-4">
@@ -63,11 +75,10 @@ export function TenantBillingManager({ propertyId }: TenantBillingManagerProps) 
             utilityBills={utilityBills}
           />
         </TabsContent>
-
-        <TabsContent value="calculator" className="space-y-4">
-          <BillingCalculatorWidget />
-        </TabsContent>
       </Tabs>
+
+      {/* Persisted Notes Widget */}
+      <PersistedNotesWidget propertyId={propertyId} />
     </div>
   );
 }

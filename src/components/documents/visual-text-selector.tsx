@@ -119,7 +119,7 @@ export function VisualTextSelector({
           <div>
             <Label className="text-sm font-medium">Selected text:</Label>
             <div className="mt-1 p-2 bg-white border rounded text-sm font-mono">
-              "{selectedText}"
+              &quot;{selectedText}&quot;
             </div>
           </div>
 

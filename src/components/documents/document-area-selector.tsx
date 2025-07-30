@@ -80,7 +80,7 @@ export function DocumentAreaSelector({
     if (currentPage && currentPage !== pageNumber) {
       setPageNumber(currentPage);
     }
-  }, [currentPage]);
+  }, [currentPage, pageNumber]);
 
   useEffect(() => {
     // Report initial scale when component mounts
@@ -435,10 +435,12 @@ export function DocumentAreaSelector({
                       <div className="flex gap-2">
                         <Input
                           type="color"
-                          value={redactionColor}
+                          value={selectedAreaData.color || redactionColor}
                           onChange={(e) => {
                             console.log('Color picker changed to:', e.target.value);
                             setRedactionColor(e.target.value);
+                            // Update the selected area's color
+                            updateArea(selectedAreaData.id, { color: e.target.value });
                           }}
                           className="w-12 h-8 p-1 rounded cursor-pointer"
                         />
@@ -464,6 +466,8 @@ export function DocumentAreaSelector({
                             onClick={() => {
                               console.log('Color button clicked:', color);
                               setRedactionColor(color);
+                              // Update the selected area's color
+                              updateArea(selectedAreaData.id, { color: color });
                             }}
                           />
                         ))}
@@ -483,12 +487,56 @@ export function DocumentAreaSelector({
                 </Button>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">
-                {isRedactionMode 
-                  ? "Draw a rectangle on the document to redact sensitive information"
-                  : "Draw a rectangle on the document to define an extraction area"
-                }
-              </p>
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  {isRedactionMode 
+                    ? "Draw a rectangle on the document to redact sensitive information"
+                    : "Draw a rectangle on the document to define an extraction area"
+                  }
+                </p>
+                
+                {isRedactionMode && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Redaction Color</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="color"
+                        value={redactionColor}
+                        onChange={(e) => {
+                          console.log('Color picker changed to:', e.target.value);
+                          setRedactionColor(e.target.value);
+                        }}
+                        className="w-12 h-8 p-1 rounded cursor-pointer"
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setIsColorPickingMode(!isColorPickingMode)}
+                        className={cn(
+                          "flex-1",
+                          isColorPickingMode && "bg-blue-100 border-blue-300"
+                        )}
+                      >
+                        <Pipette className="h-3 w-3 mr-1" />
+                        {isColorPickingMode ? "Click PDF to sample" : "Pick from PDF"}
+                      </Button>
+                    </div>
+                    <div className="flex gap-1">
+                      {["#000000", "#FFFFFF", "#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF", "#00FFFF"].map(color => (
+                        <button
+                          key={color}
+                          className="w-6 h-6 rounded border border-gray-300 cursor-pointer hover:scale-110 transition-transform"
+                          style={{ backgroundColor: color }}
+                          onClick={() => {
+                            console.log('Color button clicked:', color);
+                            setRedactionColor(color);
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
             
             <div className="mt-6 space-y-2">

@@ -24,7 +24,7 @@ export function OCRTips() {
         <div className="flex items-start gap-2">
           <Eye className="h-3 w-3 mt-0.5 flex-shrink-0" />
           <div>
-            <span className="font-medium">Check crop images:</span> Use "Debug OCR" to see what the system is trying to read
+            <span className="font-medium">Check crop images:</span> Use &quot;Debug OCR&quot; to see what the system is trying to read
           </div>
         </div>
         

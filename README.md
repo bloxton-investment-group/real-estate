@@ -142,15 +142,43 @@ See `/convex/schema.ts` for the complete database structure.
 
 ## Deployment
 
-1. Deploy Convex backend:
+### Quick Deployment (Recommended)
+
+Run the deployment script:
+```bash
+./deploy.sh
+```
+
+This will verify your build and provide next steps.
+
+### Manual Deployment
+
+1. **Deploy Convex backend** (✅ Already deployed):
 ```bash
 npx convex deploy
 ```
+Production URL: `https://affable-gazelle-170.convex.cloud`
 
-2. Deploy to Vercel:
+2. **Set up Clerk Production App**:
+   - Create production app at https://clerk.com
+   - Configure domain and redirect URLs
+   - Set up webhooks for user sync
+
+3. **Deploy to Vercel**:
+   - Connect GitHub repo to Vercel
+   - Set environment variables (see DEPLOYMENT.md)
+   - Deploy automatically
+
+### Environment Variables for Production
+
 ```bash
-vercel
+NEXT_PUBLIC_CONVEX_URL=https://affable-gazelle-170.convex.cloud
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...
+CLERK_SECRET_KEY=sk_live_...
+CLERK_WEBHOOK_SECRET=whsec_...
 ```
+
+See `DEPLOYMENT.md` for complete deployment guide.
 
 ## Security
 

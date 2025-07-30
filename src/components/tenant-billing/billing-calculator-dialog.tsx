@@ -5,13 +5,28 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Calculator, Minus, Plus, X } from "lucide-react";
+import { Calculator, Minus, Plus, X, Copy } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { toast } from "@/components/ui/use-toast";
 
-export function BillingCalculatorWidget() {
+interface BillingCalculatorDialogProps {
+  onCalculationComplete?: (result: string) => void;
+  children?: React.ReactNode;
+}
+
+export function BillingCalculatorDialog({ onCalculationComplete, children }: BillingCalculatorDialogProps) {
   const [roomReading, setRoomReading] = useState("");
   const [fanReading, setFanReading] = useState("");
   const [meterMultiplier, setMeterMultiplier] = useState("16");
   const [customCalculation, setCustomCalculation] = useState("");
+  const [open, setOpen] = useState(false);
 
   const roomValue = parseFloat(roomReading) || 0;
   const fanValue = parseFloat(fanReading) || 0;
@@ -27,20 +42,40 @@ export function BillingCalculatorWidget() {
     setCustomCalculation("");
   };
 
+  const handleCopyResults = () => {
+    const resultText = `Snyder: ${snyderResult.toFixed(2)} kWh | Multiplied: ${multipliedResult.toFixed(2)} kWh`;
+    navigator.clipboard.writeText(resultText);
+    toast({
+      title: "Results Copied",
+      description: "Calculation results copied to clipboard",
+    });
+    if (onCalculationComplete) {
+      onCalculationComplete(resultText);
+    }
+  };
+
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        {children || (
+          <Button variant="outline" size="sm">
+            <Calculator className="h-4 w-4 mr-2" />
+            Calculator
+          </Button>
+        )}
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
             <Calculator className="h-5 w-5" />
-            Billing Calculator Widget
-          </CardTitle>
-          <p className="text-sm text-gray-600">
+            Billing Calculator
+          </DialogTitle>
+          <DialogDescription>
             Quick calculations for tenant billing scenarios
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-6 mt-4">
           {/* Snyder Calculation */}
           <div className="p-4 border rounded-lg bg-blue-50">
             <h4 className="font-semibold text-blue-800 mb-3">Snyder Calculation (Room - Fan)</h4>
@@ -140,12 +175,10 @@ export function BillingCalculatorWidget() {
             </Button>
             <Button 
               variant="outline" 
-              onClick={() => {
-                const resultText = `Snyder: ${snyderResult.toFixed(2)} kWh | Multiplied: ${multipliedResult.toFixed(2)} kWh`;
-                navigator.clipboard.writeText(resultText);
-              }}
+              onClick={handleCopyResults}
               className="flex-1"
             >
+              <Copy className="h-4 w-4 mr-2" />
               Copy Results
             </Button>
           </div>
@@ -154,10 +187,10 @@ export function BillingCalculatorWidget() {
           <div className="text-xs text-gray-500 space-y-1 p-3 bg-gray-50 rounded-lg">
             <div><strong>Snyder Calculation:</strong> For tenants with fan meters that need to be subtracted</div>
             <div><strong>Meter Multiplier:</strong> For meters that show readings that need to be multiplied (e.g., ×16)</div>
-            <div><strong>Quick Copy:</strong> Use "Copy Results" to paste into calculation notes</div>
+            <div><strong>Quick Copy:</strong> Use &quot;Copy Results&quot; to paste into calculation notes</div>
           </div>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

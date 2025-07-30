@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -132,10 +133,12 @@ export function OCRDebugViewer({ onDebugOCR }: OCRDebugViewerProps) {
                 
                 {result.imageUrl && (
                   <div className="mb-2">
-                    <img
+                    <Image
                       src={result.imageUrl}
                       alt={`OCR crop for ${result.fieldName}`}
                       className="w-full border rounded bg-white"
+                      width={400}
+                      height={120}
                       style={{ 
                         imageRendering: 'pixelated',
                         maxHeight: '120px',
