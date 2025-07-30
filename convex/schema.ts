@@ -240,6 +240,9 @@ export default defineSchema({
       main: v.optional(v.number()),
     })),
     
+    // Supporting image (e.g., meter reading photo)
+    supportingImageId: v.optional(v.id("_storage")),
+    
     calculationNotes: v.optional(v.string()), // e.g., "Room: 2456 - Fan: 1089 = 1367 kWh"
     createdBy: v.id("users"),
     createdAt: v.number(),

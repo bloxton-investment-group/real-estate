@@ -66,6 +66,7 @@ export const createTenantBillingPeriod = mutation({
       main: v.optional(v.number()),
     })),
     calculationNotes: v.optional(v.string()),
+    supportingImageId: v.optional(v.id("_storage")),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -103,6 +104,7 @@ export const createTenantBillingPeriod = mutation({
       kilowattHours: args.kilowattHours,
       meterReadings: args.meterReadings,
       calculationNotes: args.calculationNotes,
+      supportingImageId: args.supportingImageId,
       createdBy: user._id,
       createdAt: Date.now(),
     });
@@ -178,6 +180,157 @@ export const findOverlappingUtilityBills = query({
 });
 
 // Calculate pro-rata allocation for a tenant billing period
+// Update supporting image for a billing period
+export const updateSupportingImage = mutation({
+  args: {
+    billingPeriodId: v.id("tenantBillingPeriods"),
+    supportingImageId: v.id("_storage"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    // Get current user
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .first();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Only admins and managers can update billing periods
+    if (user.role === "viewer") {
+      throw new Error("Insufficient permissions");
+    }
+
+    const period = await ctx.db.get(args.billingPeriodId);
+    if (!period) {
+      throw new Error("Billing period not found");
+    }
+
+    // Delete old image if exists
+    if (period.supportingImageId) {
+      await ctx.storage.delete(period.supportingImageId);
+    }
+
+    // Update the period with new image
+    await ctx.db.patch(args.billingPeriodId, {
+      supportingImageId: args.supportingImageId,
+    });
+
+    // Log the action
+    await ctx.db.insert("auditLogs", {
+      userId: user._id,
+      action: "update_billing_period_image",
+      resourceType: "tenantBillingPeriods",
+      resourceId: args.billingPeriodId,
+      metadata: { imageId: args.supportingImageId },
+      timestamp: Date.now(),
+    });
+
+    return args.billingPeriodId;
+  },
+});
+
+// Delete supporting image for a billing period
+export const deleteSupportingImage = mutation({
+  args: {
+    billingPeriodId: v.id("tenantBillingPeriods"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    // Get current user
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", identity.subject))
+      .first();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Only admins and managers can update billing periods
+    if (user.role === "viewer") {
+      throw new Error("Insufficient permissions");
+    }
+
+    const period = await ctx.db.get(args.billingPeriodId);
+    if (!period) {
+      throw new Error("Billing period not found");
+    }
+
+    // Delete image if exists
+    if (period.supportingImageId) {
+      await ctx.storage.delete(period.supportingImageId);
+    }
+
+    // Remove image reference
+    await ctx.db.patch(args.billingPeriodId, {
+      supportingImageId: undefined,
+    });
+
+    // Log the action
+    await ctx.db.insert("auditLogs", {
+      userId: user._id,
+      action: "delete_billing_period_image",
+      resourceType: "tenantBillingPeriods",
+      resourceId: args.billingPeriodId,
+      timestamp: Date.now(),
+    });
+
+    return args.billingPeriodId;
+  },
+});
+
+// Get supporting image URL
+export const getSupportingImageUrl = query({
+  args: {
+    storageId: v.optional(v.id("_storage")),
+  },
+  handler: async (ctx, args) => {
+    if (!args.storageId) return null;
+    
+    try {
+      const url = await ctx.storage.getUrl(args.storageId);
+      return url;
+    } catch (error) {
+      console.error("Error getting image URL:", error);
+      return null;
+    }
+  },
+});
+
+// Get multiple supporting image URLs in batch
+export const getBatchSupportingImageUrls = query({
+  args: {
+    storageIds: v.array(v.id("_storage")),
+  },
+  handler: async (ctx, args) => {
+    const urls: string[] = [];
+    
+    for (const storageId of args.storageIds) {
+      try {
+        const url = await ctx.storage.getUrl(storageId);
+        if (url) {
+          urls.push(url);
+        }
+      } catch (error) {
+        console.error("Error getting image URL for", storageId, error);
+      }
+    }
+    
+    return urls;
+  },
+});
+
 export const calculateProRataAllocation = query({
   args: {
     tenantBillingPeriodId: v.id("tenantBillingPeriods"),

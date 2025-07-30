@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,10 +11,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { AlertTriangle, Calculator, Save } from "lucide-react";
+import { AlertTriangle, Calculator, Save, Upload, Image, X } from "lucide-react";
 import { BillingCalculatorDialog } from "./billing-calculator-dialog";
 import { useDraftStorage } from "@/hooks/useDraftStorage";
 import { Badge } from "@/components/ui/badge";
+import { FileUpload } from "@/components/file-upload";
+import { ImageCropper } from "@/components/ui/image-cropper";
 
 interface Tenant {
   _id: Id<"tenants">;
@@ -36,10 +38,14 @@ interface FormData {
   fanReading: string;
   mainReading: string;
   calculationNotes: string;
+  supportingImageId?: Id<"_storage">;
 }
 
 export function TenantBillingPeriodForm({ propertyId, tenants }: TenantBillingPeriodFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showCropper, setShowCropper] = useState(false);
+  const [tempImageUrl, setTempImageUrl] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
   
   const {
     data: formData,
@@ -67,6 +73,10 @@ export function TenantBillingPeriodForm({ propertyId, tenants }: TenantBillingPe
   );
 
   const createBillingPeriod = useMutation(api.tenantBilling.createTenantBillingPeriod);
+  const generateUploadUrl = useMutation(api.files.generateUploadUrl);
+  const supportingImageUrl = useQuery(api.tenantBilling.getSupportingImageUrl, {
+    storageId: formData.supportingImageId,
+  });
 
   const selectedTenant = tenants.find(t => t._id === formData.selectedTenantId);
 
@@ -100,6 +110,7 @@ export function TenantBillingPeriodForm({ propertyId, tenants }: TenantBillingPe
         kilowattHours: kwhValue,
         meterReadings: Object.keys(meterReadings).length > 0 ? meterReadings : undefined,
         calculationNotes: formData.calculationNotes || undefined,
+        supportingImageId: formData.supportingImageId,
       });
 
       // Clear form and draft
@@ -154,6 +165,60 @@ export function TenantBillingPeriodForm({ propertyId, tenants }: TenantBillingPe
     return parts;
   };
 
+  const handleImageUpload = async (files: FileList) => {
+    const file = files[0];
+    if (!file || !file.type.startsWith('image/')) {
+      toast.error("Please upload an image file");
+      return;
+    }
+
+    // Create a temporary URL for the cropper
+    const url = URL.createObjectURL(file);
+    setTempImageUrl(url);
+    setShowCropper(true);
+  };
+
+  const handleCroppedImage = async (croppedBlob: Blob) => {
+    setUploadingImage(true);
+    setShowCropper(false);
+
+    try {
+      // Get upload URL from Convex
+      const postUrl = await generateUploadUrl();
+      
+      // Upload the cropped image
+      const result = await fetch(postUrl, {
+        method: "POST",
+        headers: { "Content-Type": croppedBlob.type },
+        body: croppedBlob,
+      });
+
+      if (!result.ok) {
+        throw new Error("Failed to upload image");
+      }
+
+      const { storageId } = await result.json();
+      
+      // Update form data with the storage ID
+      updateDraft({ supportingImageId: storageId as Id<"_storage"> });
+      
+      toast.success("Image uploaded successfully");
+    } catch (error) {
+      toast.error("Failed to upload image");
+      console.error("Error uploading image:", error);
+    } finally {
+      setUploadingImage(false);
+      if (tempImageUrl) {
+        URL.revokeObjectURL(tempImageUrl);
+        setTempImageUrl(null);
+      }
+    }
+  };
+
+  const handleRemoveImage = () => {
+    updateDraft({ supportingImageId: undefined });
+  };
+
   return (
     <div className="space-y-6">
       {/* Tenant-Specific Instructions */}
@@ -199,7 +264,7 @@ export function TenantBillingPeriodForm({ propertyId, tenants }: TenantBillingPe
                 <SelectTrigger>
                   <SelectValue placeholder="Select a tenant" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-white border shadow-lg">
                   {tenants.map((tenant) => (
                     <SelectItem key={tenant._id} value={tenant._id}>
                       {tenant.name}
@@ -324,12 +389,82 @@ export function TenantBillingPeriodForm({ propertyId, tenants }: TenantBillingPe
               />
             </div>
 
+            {/* Supporting Image Upload */}
+            <div>
+              <Label>Meter Proof Image (Optional)</Label>
+              <div className="mt-2">
+                {formData.supportingImageId && supportingImageUrl ? (
+                  <div className="relative inline-block">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={supportingImageUrl}
+                      alt="Meter proof"
+                      className="max-w-xs max-h-48 rounded-lg border"
+                    />
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="icon"
+                      className="absolute top-2 right-2"
+                      onClick={handleRemoveImage}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">
+                      Upload a photo of the meter reading for documentation
+                    </p>
+                    <label htmlFor="meter-image-upload" className="cursor-pointer">
+                      <div className="flex items-center gap-2 px-4 py-2 border rounded-lg hover:bg-gray-50 w-fit">
+                        {uploadingImage ? (
+                          <>Processing...</>
+                        ) : (
+                          <>
+                            <Upload className="h-4 w-4" />
+                            <span>Upload Image</span>
+                          </>
+                        )}
+                      </div>
+                      <input
+                        id="meter-image-upload"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => e.target.files && handleImageUpload(e.target.files)}
+                        disabled={uploadingImage}
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <Button type="submit" disabled={isSubmitting} className="w-full">
               {isSubmitting ? "Creating..." : "Create Billing Period"}
             </Button>
           </form>
         </CardContent>
       </Card>
+
+      {/* Image Cropper Dialog */}
+      {showCropper && tempImageUrl && (
+        <ImageCropper
+          imageUrl={tempImageUrl}
+          open={showCropper}
+          onSave={handleCroppedImage}
+          onCancel={() => {
+            setShowCropper(false);
+            if (tempImageUrl) {
+              URL.revokeObjectURL(tempImageUrl);
+              setTempImageUrl(null);
+            }
+          }}
+          title="Crop Meter Image"
+          description="Select the area of the meter reading you want to keep"
+        />
+      )}
     </div>
   );
 }

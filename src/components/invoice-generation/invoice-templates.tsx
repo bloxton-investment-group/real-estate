@@ -143,6 +143,7 @@ export interface TenantInvoiceData {
   };
   notes?: string;
   calculationBreakdown?: string;
+  supportingImages?: string[]; // Array of image URLs
 }
 
 // Utility Bill Pro-Rata Invoice Template
@@ -318,6 +319,30 @@ export const TenantProRataInvoice: React.FC<{ data: TenantInvoiceData }> = ({ da
               NOTES
             </Text>
             <Text style={[commonStyles.value, { fontSize: 10, lineHeight: 1.5 }]}>{data.notes}</Text>
+          </View>
+        )}
+
+        {/* Supporting Images */}
+        {data.supportingImages && data.supportingImages.length > 0 && (
+          <View style={[commonStyles.section, { marginTop: 30 }]}>
+            <Text style={[commonStyles.label, { fontSize: 12, fontWeight: 'bold', marginBottom: 10 }]}>
+              METER READING DOCUMENTATION
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+              {data.supportingImages.map((imageUrl, index) => (
+                <Image
+                  key={index}
+                  src={imageUrl}
+                  style={{ 
+                    width: 200, 
+                    height: 150, 
+                    objectFit: 'contain',
+                    border: '1px solid #e0e0e0',
+                    borderRadius: 4
+                  }}
+                />
+              ))}
+            </View>
           </View>
         )}
 

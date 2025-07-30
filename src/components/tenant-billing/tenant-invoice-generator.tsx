@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
@@ -9,13 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, FileText, Calculator, DollarSign } from "lucide-react";
-import { InvoiceGenerator } from "../invoice-generation/invoice-generator";
+import { AlertTriangle, FileText, Calculator, DollarSign, Image } from "lucide-react";
 import { TenantInvoiceData } from "../invoice-generation/invoice-templates";
 import { toast } from "@/components/ui/use-toast";
 import { format, addDays } from "date-fns";
 import { UtilityBillCoverage } from "./utility-bill-coverage";
 import { ProRataDetailsDialog } from "./pro-rata-details-dialog";
+import { BillingPeriodImage } from "./billing-period-image";
+import { InvoiceGeneratorWithImages } from "../invoice-generation/invoice-generator-with-images";
 
 interface Tenant {
   _id: Id<"tenants">;
@@ -33,6 +34,7 @@ interface TenantBillingPeriod {
   endDate: string;
   kilowattHours: number;
   calculationNotes?: string;
+  supportingImageId?: Id<"_storage">;
 }
 
 interface UtilityBill {
@@ -74,6 +76,18 @@ export function TenantInvoiceGenerator({
   const generateInvoice = useMutation(api.invoiceGeneration.generateTenantInvoice);
   const updateInvoicePdf = useMutation(api.invoiceGeneration.updateInvoicePdfUrl);
   const markAsSent = useMutation(api.invoiceGeneration.markInvoiceAsSent);
+
+  // Get supporting image URLs for selected periods when invoice is generated
+  const supportingImageIds = generatedInvoiceData
+    ? Array.from(selectedPeriodIds)
+        .map(id => billingPeriods.find(p => p._id === id)?.supportingImageId)
+        .filter((id): id is Id<"_storage"> => id !== undefined)
+    : [];
+  
+  const imageUrls = useQuery(
+    api.tenantBilling.getBatchSupportingImageUrls,
+    supportingImageIds.length > 0 ? { storageIds: supportingImageIds } : "skip"
+  ) || [];
 
   const selectedTenant = tenants.find(t => t._id === selectedTenantId);
   const tenantPeriods = billingPeriods.filter(p => p.tenantId === selectedTenantId);
@@ -124,6 +138,14 @@ export function TenantInvoiceGenerator({
         billingPeriods.find(p => p._id === id)!
       ).filter(Boolean);
       
+      // Collect supporting image storage IDs
+      const supportingImageIds: Id<"_storage">[] = [];
+      for (const period of periods) {
+        if (period.supportingImageId) {
+          supportingImageIds.push(period.supportingImageId);
+        }
+      }
+      
       const earliestStart = periods.reduce((min, p) => 
         new Date(p.startDate) < new Date(min) ? p.startDate : min, 
         periods[0].startDate
@@ -167,7 +189,10 @@ export function TenantInvoiceGenerator({
         },
         notes: tenant.billingInstructions,
         calculationBreakdown: `Tenant Usage: ${proRataCalculation.period.kilowattHours} kWh\nProperty Total: ${proRataCalculation.totalPropertyKwh.toFixed(0)} kWh\nContribution: ${(proRataCalculation.tenantRatio * 100).toFixed(2)}%`,
-      };
+      } as TenantInvoiceData;
+
+      // Pass the storage IDs to be resolved in the generator
+      (invoiceData as any).supportingImageIds = supportingImageIds;
 
       setGeneratedInvoiceData(invoiceData);
       setGeneratedInvoiceId(result.invoiceId);
@@ -311,6 +336,12 @@ export function TenantInvoiceGenerator({
                             Notes: {period.calculationNotes}
                           </span>
                         )}
+                        {period.supportingImageId && (
+                          <BillingPeriodImage 
+                            storageId={period.supportingImageId}
+                            periodDates={`${period.startDate} to ${period.endDate}`}
+                          />
+                        )}
                       </div>
                     </div>
                   </div>
@@ -424,8 +455,9 @@ export function TenantInvoiceGenerator({
 
       {/* Generated Invoice */}
       {generatedInvoiceData && generatedInvoiceId && (
-        <InvoiceGenerator
+        <InvoiceGeneratorWithImages
           invoiceData={generatedInvoiceData}
+          imageUrls={imageUrls}
           onSave={async (pdfUrl) => {
             try {
               await updateInvoicePdf({
